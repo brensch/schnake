@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Schnake</title>
+    <link data-trunk rel="css" href="style.css" />
+    <link data-trunk rel="rust" href="Cargo.toml" />
+  </head>
+  <body>
+    <main class="shell">
+      <section class="game-pane">
+        <div class="topbar">
+          <div>
+            <h1>Schnake</h1>
+            <p id="status">Choose host or join. Arrow keys or WASD steer.</p>
+          </div>
+          <div id="scoreboard" class="scoreboard"></div>
+        </div>
+        <canvas id="game" width="960" height="660" aria-label="Schnake board"></canvas>
+      </section>
+
+      <aside class="control-pane">
+        <div id="start-panel" class="stage active">
+          <label class="field">
+            <span>Name</span>
+            <input id="name" maxlength="18" value="player" />
+          </label>
+          <div class="choice-row">
+            <button id="host-start-btn" type="button">Host</button>
+            <button id="join-start-btn" type="button">Join</button>
+          </div>
+        </div>
+
+        <section id="host-panel" class="stage panel">
+          <h2>Host</h2>
+          <div id="host-qr" class="qr-code"></div>
+          <button id="host-scan-reply-btn" type="button">Scan Reply</button>
+          <div id="host-scan" class="scanner"></div>
+        </section>
+
+        <section id="join-panel" class="stage panel">
+          <h2>Join</h2>
+          <button id="join-scan-host-btn" type="button">Scan Host</button>
+          <div id="join-scan" class="scanner"></div>
+          <div id="join-qr" class="qr-code"></div>
+        </section>
+      </aside>
+    </main>
+  </body>
+</html>
