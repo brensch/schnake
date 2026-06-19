@@ -3,6 +3,12 @@ use crate::dom::{by_id, escape_html};
 use crate::protocol::{GRID_H, GRID_W};
 use web_sys::HtmlElement;
 
+// Game Boy DMG palette.
+const GB_DARKEST: &str = "#0f380f";
+const GB_DARK: &str = "#306230";
+const GB_LIGHT: &str = "#8bac0f";
+const GB_LIGHTEST: &str = "#9bbc0f";
+
 impl App {
     pub(crate) fn show_stage(&self, active_id: &str) {
         for (id, base_class) in [
@@ -25,44 +31,78 @@ impl App {
         let height = self.canvas.height() as f64;
         let cell = (width / GRID_W as f64).min(height / GRID_H as f64);
 
-        self.ctx.set_fill_style_str("#05070b");
+        let board_w = GRID_W as f64 * cell;
+        let board_h = GRID_H as f64 * cell;
+
+        // LCD screen background (lightest shade).
+        self.ctx.set_fill_style_str(GB_LIGHTEST);
         self.ctx.fill_rect(0.0, 0.0, width, height);
 
-        self.ctx.set_stroke_style_str("#162334");
+        // Subtle checkerboard so the playfield reads as pixels.
+        self.ctx.set_fill_style_str(GB_LIGHT);
+        for y in 0..GRID_H {
+            for x in 0..GRID_W {
+                if (x + y) % 2 == 0 {
+                    self.ctx
+                        .fill_rect(x as f64 * cell, y as f64 * cell, cell, cell);
+                }
+            }
+        }
+
+        // Dot-matrix grid lines.
+        self.ctx.set_stroke_style_str("rgba(15, 56, 15, 0.12)");
         self.ctx.set_line_width(1.0);
         for x in 0..=GRID_W {
             let px = x as f64 * cell;
             self.ctx.begin_path();
             self.ctx.move_to(px, 0.0);
-            self.ctx.line_to(px, GRID_H as f64 * cell);
+            self.ctx.line_to(px, board_h);
             self.ctx.stroke();
         }
         for y in 0..=GRID_H {
             let py = y as f64 * cell;
             self.ctx.begin_path();
             self.ctx.move_to(0.0, py);
-            self.ctx.line_to(GRID_W as f64 * cell, py);
+            self.ctx.line_to(board_w, py);
             self.ctx.stroke();
         }
 
-        self.ctx.set_fill_style_str("#ff5252");
-        self.ctx.fill_rect(
-            self.state.apple.x as f64 * cell + 4.0,
-            self.state.apple.y as f64 * cell + 4.0,
-            cell - 8.0,
-            cell - 8.0,
-        );
+        // Apple: dark pixel square with a small highlight bite.
+        let ax = self.state.apple.x as f64 * cell;
+        let ay = self.state.apple.y as f64 * cell;
+        let a_inset = (cell * 0.18).max(2.0);
+        self.ctx.set_fill_style_str(GB_DARKEST);
+        self.ctx
+            .fill_rect(ax + a_inset, ay + a_inset, cell - a_inset * 2.0, cell - a_inset * 2.0);
+        self.ctx.set_fill_style_str(GB_DARK);
+        let dot = (cell * 0.16).max(2.0);
+        self.ctx
+            .fill_rect(ax + cell * 0.34, ay + cell * 0.28, dot, dot);
 
+        // Snakes: solid pixel squares, each with a dark LCD outline.
         for snake in &self.state.snakes {
-            self.ctx.set_fill_style_str(&snake.color);
             for (index, point) in snake.body.iter().enumerate() {
-                let inset = if index == 0 { 2.0 } else { 4.0 };
-                self.ctx.fill_rect(
-                    point.x as f64 * cell + inset,
-                    point.y as f64 * cell + inset,
-                    cell - inset * 2.0,
-                    cell - inset * 2.0,
-                );
+                let head = index == 0;
+                let px = point.x as f64 * cell;
+                let py = point.y as f64 * cell;
+
+                // Dark outline cell (segments touch to form a continuous border).
+                self.ctx.set_fill_style_str(GB_DARKEST);
+                self.ctx.fill_rect(px, py, cell, cell);
+
+                // Inner colour block; head sits slightly larger/brighter.
+                let inset = if head { cell * 0.10 } else { cell * 0.16 };
+                self.ctx.set_fill_style_str(&snake.color);
+                self.ctx
+                    .fill_rect(px + inset, py + inset, cell - inset * 2.0, cell - inset * 2.0);
+
+                // Eye pixel on the head for a touch of character.
+                if head {
+                    self.ctx.set_fill_style_str(GB_DARKEST);
+                    let eye = (cell * 0.16).max(2.0);
+                    self.ctx
+                        .fill_rect(px + cell * 0.5 - eye / 2.0, py + cell * 0.3, eye, eye);
+                }
             }
         }
     }
