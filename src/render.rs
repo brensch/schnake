@@ -1,28 +1,34 @@
-use crate::app::App;
+use crate::app::{App, Role};
 use crate::dom::{by_id, escape_html};
 use crate::protocol::{GRID_H, GRID_W};
 use web_sys::HtmlElement;
 
 impl App {
     pub(crate) fn show_stage(&self, active_id: &str) {
-        for id in ["start-panel", "host-panel", "join-panel"] {
+        for (id, base_class) in [
+            ("start-screen", "stage"),
+            ("host-screen", "stage flow-screen"),
+            ("join-screen", "stage flow-screen"),
+            ("game-screen", "stage game-screen"),
+        ] {
             if let Ok(stage) = by_id::<HtmlElement>(&self.document, id) {
-                let panel = if id == "start-panel" { "" } else { " panel" };
                 let active = if id == active_id { " active" } else { "" };
-                stage.set_class_name(&format!("stage{panel}{active}"));
+                stage.set_class_name(&format!("{base_class}{active}"));
             }
         }
+        self.sync_action_visibility();
     }
 
     pub(crate) fn render(&self) {
+        self.sync_action_visibility();
         let width = self.canvas.width() as f64;
         let height = self.canvas.height() as f64;
         let cell = (width / GRID_W as f64).min(height / GRID_H as f64);
 
-        self.ctx.set_fill_style_str("#f9fbf8");
+        self.ctx.set_fill_style_str("#05070b");
         self.ctx.fill_rect(0.0, 0.0, width, height);
 
-        self.ctx.set_stroke_style_str("#dfe7e1");
+        self.ctx.set_stroke_style_str("#162334");
         self.ctx.set_line_width(1.0);
         for x in 0..=GRID_W {
             let px = x as f64 * cell;
@@ -39,7 +45,7 @@ impl App {
             self.ctx.stroke();
         }
 
-        self.ctx.set_fill_style_str("#d83b2d");
+        self.ctx.set_fill_style_str("#ff5252");
         self.ctx.fill_rect(
             self.state.apple.x as f64 * cell + 4.0,
             self.state.apple.y as f64 * cell + 4.0,
@@ -85,6 +91,32 @@ impl App {
     pub(crate) fn set_status(&self, message: &str) {
         if let Ok(status) = by_id::<HtmlElement>(&self.document, "status") {
             status.set_text_content(Some(message));
+        }
+    }
+
+    fn sync_action_visibility(&self) {
+        self.set_hidden("add-player-btn", self.role != Role::Host);
+        self.set_hidden(
+            "start-game-btn",
+            self.role != Role::Host || self.state.started,
+        );
+    }
+
+    fn set_hidden(&self, id: &str, hidden: bool) {
+        let Ok(element) = by_id::<HtmlElement>(&self.document, id) else {
+            return;
+        };
+        let class_name = element.class_name();
+        let has_hidden = class_name.split_whitespace().any(|class| class == "hidden");
+        if hidden && !has_hidden {
+            element.set_class_name(&format!("{class_name} hidden"));
+        } else if !hidden && has_hidden {
+            let classes = class_name
+                .split_whitespace()
+                .filter(|class| *class != "hidden")
+                .collect::<Vec<_>>()
+                .join(" ");
+            element.set_class_name(&classes);
         }
     }
 }

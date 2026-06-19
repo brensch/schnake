@@ -66,6 +66,7 @@ pub fn start() -> Result<(), JsValue> {
         join_channel: None,
     }));
 
+    app.borrow_mut().load_profile();
     bind_ui(app.clone())?;
     bind_keys(app.clone())?;
     start_loop(app.clone())?;

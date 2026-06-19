@@ -1,9 +1,9 @@
 use serde::{Deserialize, Serialize};
 
 pub const GRID_W: i32 = 32;
-pub const GRID_H: i32 = 22;
+pub const GRID_H: i32 = 32;
 pub const COLORS: [&str; 8] = [
-    "#2f7d54", "#d14d41", "#2c6fb8", "#8f5bb3", "#c2851b", "#148184", "#bf4f8c", "#59636a",
+    "#00e676", "#ff5252", "#40c4ff", "#e040fb", "#ffd740", "#64ffda", "#ff80ab", "#cfd8dc",
 ];
 
 #[derive(Clone, Copy, Deserialize, PartialEq, Serialize)]
@@ -37,15 +37,17 @@ pub struct GameState {
     pub snakes: Vec<Snake>,
     pub tick: u64,
     pub seed: u32,
+    pub started: bool,
 }
 
 impl GameState {
     pub fn new() -> Self {
         Self {
-            apple: Point { x: 15, y: 10 },
+            apple: Point { x: 15, y: 15 },
             snakes: Vec::new(),
             tick: 0,
             seed: 0x5eed_1234,
+            started: false,
         }
     }
 }

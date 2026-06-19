@@ -18,7 +18,7 @@ pub(crate) async fn create_host_invite(app: Rc<RefCell<App>>) -> Result<(), JsVa
         let mut app = app.borrow_mut();
         app.sync_name();
         app.role = Role::Host;
-        app.show_stage("host-panel");
+        app.show_stage("host-screen");
         let id = app.local_id.clone();
         let name = app.local_name.clone();
         let color = app.local_color.clone();
@@ -66,7 +66,7 @@ async fn create_join_reply(app: Rc<RefCell<App>>, offer_text: &str) -> Result<()
         let mut app = app.borrow_mut();
         app.sync_name();
         app.role = Role::Client;
-        app.show_stage("join-panel");
+        app.show_stage("join-screen");
         app.set_status("Making reply QR.");
     }
 
@@ -123,7 +123,8 @@ fn setup_channel(app: Rc<RefCell<App>>, channel: RtcDataChannel, is_host: bool) 
         Closure::wrap(Box::new(move || {
             let app_ref = app.borrow();
             if is_host {
-                app_ref.set_status("Peer connected.");
+                app_ref.set_status("Peer connected. Press Start when ready.");
+                app_ref.show_stage("game-screen");
                 app_ref.send_channel(
                     &channel,
                     &NetMsg::State {
@@ -131,7 +132,8 @@ fn setup_channel(app: Rc<RefCell<App>>, channel: RtcDataChannel, is_host: bool) 
                     },
                 );
             } else {
-                app_ref.set_status("Connected to host.");
+                app_ref.set_status("Connected. Waiting for host to start.");
+                app_ref.show_stage("game-screen");
                 app_ref.send_channel(
                     &channel,
                     &NetMsg::Hello {
@@ -161,6 +163,8 @@ fn setup_channel(app: Rc<RefCell<App>>, channel: RtcDataChannel, is_host: bool) 
             match (is_host, message) {
                 (true, NetMsg::Hello { id, name, color }) => {
                     app.add_snake(id, name, color);
+                    app.set_status("Player joined. Press Start when ready.");
+                    app.show_stage("game-screen");
                     app.send_channel(
                         &channel,
                         &NetMsg::State {
@@ -171,6 +175,12 @@ fn setup_channel(app: Rc<RefCell<App>>, channel: RtcDataChannel, is_host: bool) 
                 (true, NetMsg::Input { id, dir }) => app.set_input(&id, dir),
                 (false, NetMsg::State { state }) => {
                     app.state = state;
+                    if app.state.started {
+                        app.set_status("Game on.");
+                    } else {
+                        app.set_status("Waiting for host to start.");
+                    }
+                    app.show_stage("game-screen");
                     app.render_scoreboard();
                     app.render();
                 }

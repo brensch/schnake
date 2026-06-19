@@ -8,44 +8,72 @@
     <link data-trunk rel="rust" href="Cargo.toml" />
   </head>
   <body>
-    <main class="shell">
-      <section class="game-pane">
-        <div class="topbar">
-          <div>
-            <h1>Schnake</h1>
-            <p id="status">Choose host or join. Arrow keys or WASD steer.</p>
+    <div class="top-actions">
+      <button id="add-player-btn" class="icon-action hidden" type="button" aria-label="Add player">
+        + Player
+      </button>
+      <button id="settings-btn" class="icon-action" type="button" aria-label="Settings">
+        &#9881;
+      </button>
+      <section id="settings-panel" class="settings-panel hidden" aria-label="Settings">
+        <label class="field">
+          <span>Username</span>
+          <input id="settings-name" maxlength="18" value="player" />
+        </label>
+        <div class="field">
+          <span>Colour</span>
+          <div class="color-grid">
+            <button id="color-0" class="color-choice" type="button" data-color="#00e676" style="background:#00e676"></button>
+            <button id="color-1" class="color-choice" type="button" data-color="#ff5252" style="background:#ff5252"></button>
+            <button id="color-2" class="color-choice" type="button" data-color="#40c4ff" style="background:#40c4ff"></button>
+            <button id="color-3" class="color-choice" type="button" data-color="#e040fb" style="background:#e040fb"></button>
+            <button id="color-4" class="color-choice" type="button" data-color="#ffd740" style="background:#ffd740"></button>
+            <button id="color-5" class="color-choice" type="button" data-color="#64ffda" style="background:#64ffda"></button>
+            <button id="color-6" class="color-choice" type="button" data-color="#ff80ab" style="background:#ff80ab"></button>
+            <button id="color-7" class="color-choice" type="button" data-color="#cfd8dc" style="background:#cfd8dc"></button>
           </div>
-          <div id="scoreboard" class="scoreboard"></div>
         </div>
-        <canvas id="game" width="960" height="660" aria-label="Schnake board"></canvas>
+      </section>
+    </div>
+
+    <main class="shell">
+      <header class="masthead">
+        <h1>Schnake</h1>
+        <p id="status">Host a room or scan one to join.</p>
+      </header>
+
+      <section id="start-screen" class="stage active">
+        <div class="choice-row">
+          <button id="host-start-btn" class="mega-button" type="button">Host</button>
+          <button id="join-start-btn" class="mega-button" type="button">Join</button>
+        </div>
       </section>
 
-      <aside class="control-pane">
-        <div id="start-panel" class="stage active">
-          <label class="field">
-            <span>Name</span>
-            <input id="name" maxlength="18" value="player" />
-          </label>
-          <div class="choice-row">
-            <button id="host-start-btn" type="button">Host</button>
-            <button id="join-start-btn" type="button">Join</button>
-          </div>
+      <section id="host-screen" class="stage flow-screen">
+        <h2>Host Invite</h2>
+        <div id="host-qr" class="qr-code"></div>
+        <button id="host-scan-reply-btn" class="primary-action" type="button">Scan Reply</button>
+        <div id="host-scan" class="scanner"></div>
+      </section>
+
+      <section id="join-screen" class="stage flow-screen">
+        <h2>Join Room</h2>
+        <button id="join-scan-host-btn" class="primary-action" type="button">Scan Host QR</button>
+        <div id="join-scan" class="scanner"></div>
+        <div id="join-qr" class="qr-code"></div>
+      </section>
+
+      <section id="game-screen" class="stage game-screen">
+        <button id="start-game-btn" class="start-game hidden" type="button">Start</button>
+        <div id="scoreboard" class="scoreboard"></div>
+        <canvas id="game" width="960" height="960" aria-label="Schnake board"></canvas>
+        <div class="dpad" aria-label="Movement controls">
+          <button id="move-up" class="dpad-btn dpad-up" type="button" aria-label="Move up">&uarr;</button>
+          <button id="move-left" class="dpad-btn dpad-left" type="button" aria-label="Move left">&larr;</button>
+          <button id="move-down" class="dpad-btn dpad-down" type="button" aria-label="Move down">&darr;</button>
+          <button id="move-right" class="dpad-btn dpad-right" type="button" aria-label="Move right">&rarr;</button>
         </div>
-
-        <section id="host-panel" class="stage panel">
-          <h2>Host</h2>
-          <div id="host-qr" class="qr-code"></div>
-          <button id="host-scan-reply-btn" type="button">Scan Reply</button>
-          <div id="host-scan" class="scanner"></div>
-        </section>
-
-        <section id="join-panel" class="stage panel">
-          <h2>Join</h2>
-          <button id="join-scan-host-btn" type="button">Scan Host</button>
-          <div id="join-scan" class="scanner"></div>
-          <div id="join-qr" class="qr-code"></div>
-        </section>
-      </aside>
+      </section>
     </main>
   </body>
 </html>

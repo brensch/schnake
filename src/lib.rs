@@ -6,6 +6,7 @@ mod protocol;
 mod qr;
 mod render;
 mod rtc;
+mod settings;
 mod ui;
 
 use wasm_bindgen::prelude::*;

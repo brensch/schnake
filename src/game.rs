@@ -5,12 +5,13 @@ use web_sys::{HtmlInputElement, RtcDataChannelState};
 
 impl App {
     pub(crate) fn sync_name(&mut self) {
-        if let Ok(input) = by_id::<HtmlInputElement>(&self.document, "name") {
+        if let Ok(input) = by_id::<HtmlInputElement>(&self.document, "settings-name") {
             let trimmed = input.value().trim().to_string();
             if !trimmed.is_empty() {
-                self.local_name = trimmed;
+                self.local_name = trimmed.chars().take(18).collect();
             }
         }
+        self.sync_profile_from_dom();
     }
 
     pub(crate) fn add_snake(&mut self, id: String, name: String, color: String) {
@@ -51,6 +52,15 @@ impl App {
             if !opposite(snake.dir, dir) {
                 snake.pending = dir;
             }
+        }
+    }
+
+    pub(crate) fn start_game(&mut self) {
+        if self.role == crate::app::Role::Host {
+            self.state.started = true;
+            self.set_status("Game started.");
+            self.show_stage("game-screen");
+            self.broadcast_state();
         }
     }
 
