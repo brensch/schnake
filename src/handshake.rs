@@ -1,7 +1,7 @@
 use crate::app::{App, Role};
 use crate::dom::js_err;
 use crate::protocol::NetMsg;
-use crate::qr::{render_qr, scan_qr_text};
+use crate::qr::{render_qr, scan_qr_payload};
 use crate::rtc::{
     create_peer_connection, decode_signal, encode_local_description, session_description,
     wait_for_ice,
@@ -51,17 +51,17 @@ pub(crate) async fn create_host_invite(app: Rc<RefCell<App>>) -> Result<(), JsVa
 
 pub(crate) async fn scan_host_qr(app: Rc<RefCell<App>>) -> Result<(), JsValue> {
     app.borrow().set_status("Scanning host QR.");
-    let offer_text = scan_qr_text("join-scan").await?;
-    create_join_reply(app, &offer_text).await
+    let offer_payload = scan_qr_payload("join-scan").await?;
+    create_join_reply(app, &offer_payload).await
 }
 
 pub(crate) async fn scan_host_reply(app: Rc<RefCell<App>>) -> Result<(), JsValue> {
     app.borrow().set_status("Scanning reply QR.");
-    let answer_text = scan_qr_text("host-scan").await?;
-    apply_host_reply(app, &answer_text).await
+    let answer_payload = scan_qr_payload("host-scan").await?;
+    apply_host_reply(app, &answer_payload).await
 }
 
-async fn create_join_reply(app: Rc<RefCell<App>>, offer_text: &str) -> Result<(), JsValue> {
+async fn create_join_reply(app: Rc<RefCell<App>>, offer_payload: &[u8]) -> Result<(), JsValue> {
     {
         let mut app = app.borrow_mut();
         app.sync_name();
@@ -70,7 +70,7 @@ async fn create_join_reply(app: Rc<RefCell<App>>, offer_text: &str) -> Result<()
         app.set_status("Making reply QR.");
     }
 
-    let offer = decode_signal(offer_text)?;
+    let offer = decode_signal(offer_payload)?;
     let pc = create_peer_connection()?;
 
     {
@@ -103,8 +103,8 @@ async fn create_join_reply(app: Rc<RefCell<App>>, offer_text: &str) -> Result<()
     Ok(())
 }
 
-async fn apply_host_reply(app: Rc<RefCell<App>>, answer_text: &str) -> Result<(), JsValue> {
-    let answer = decode_signal(answer_text)?;
+async fn apply_host_reply(app: Rc<RefCell<App>>, answer_payload: &[u8]) -> Result<(), JsValue> {
+    let answer = decode_signal(answer_payload)?;
     let remote = session_description(&answer)?;
     let pc = app
         .borrow()

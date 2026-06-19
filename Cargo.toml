@@ -9,6 +9,7 @@ crate-type = ["cdylib"]
 [dependencies]
 console_error_panic_hook = "0.1"
 js-sys = "0.3"
+miniz_oxide = "0.8"
 qrcodegen = "1.8"
 quircs = "0.10"
 rqrr = "0.10"

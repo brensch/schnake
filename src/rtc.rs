@@ -1,5 +1,6 @@
 use crate::dom::js_err;
 use crate::protocol::Signal;
+use miniz_oxide::{deflate::compress_to_vec_zlib, inflate::decompress_to_vec_zlib};
 use wasm_bindgen::prelude::*;
 use wasm_bindgen::JsCast;
 use wasm_bindgen_futures::JsFuture;
@@ -7,6 +8,8 @@ use web_sys::{
     RtcConfiguration, RtcIceGatheringState, RtcIceServer, RtcPeerConnection, RtcSdpType,
     RtcSessionDescriptionInit,
 };
+
+const SIGNAL_PREFIX: &[u8] = b"SNK1";
 
 pub fn create_peer_connection() -> Result<RtcPeerConnection, JsValue> {
     let ice_server = RtcIceServer::new();
@@ -38,7 +41,7 @@ pub async fn wait_for_ice(pc: &RtcPeerConnection) -> Result<(), JsValue> {
     }
 }
 
-pub fn encode_local_description(pc: &RtcPeerConnection) -> Result<String, JsValue> {
+pub fn encode_local_description(pc: &RtcPeerConnection) -> Result<Vec<u8>, JsValue> {
     let description = pc
         .local_description()
         .ok_or_else(|| js_err("missing local description"))?;
@@ -46,10 +49,23 @@ pub fn encode_local_description(pc: &RtcPeerConnection) -> Result<String, JsValu
         sdp_type: sdp_type_to_string(description.type_()),
         sdp: description.sdp(),
     };
-    Ok(serde_json::to_string(&signal).unwrap())
+    let json = serde_json::to_vec(&signal).unwrap();
+    let compressed = compress_to_vec_zlib(&json, 9);
+    let mut payload = Vec::with_capacity(SIGNAL_PREFIX.len() + compressed.len());
+    payload.extend_from_slice(SIGNAL_PREFIX);
+    payload.extend_from_slice(&compressed);
+    Ok(payload)
 }
 
-pub fn decode_signal(text: &str) -> Result<Signal, JsValue> {
+pub fn decode_signal(payload: &[u8]) -> Result<Signal, JsValue> {
+    if let Some(compressed) = payload.strip_prefix(SIGNAL_PREFIX) {
+        let json = decompress_to_vec_zlib(compressed)
+            .map_err(|_| js_err("compressed signal is invalid"))?;
+        return serde_json::from_slice::<Signal>(&json)
+            .map_err(|error| js_err(&format!("signal JSON is invalid: {error}")));
+    }
+
+    let text = std::str::from_utf8(payload).map_err(|_| js_err("signal is not UTF-8 JSON"))?;
     let trimmed = text.trim();
     if trimmed.is_empty() {
         return Err(js_err("signal text is empty"));

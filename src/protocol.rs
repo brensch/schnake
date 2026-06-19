@@ -71,7 +71,9 @@ pub enum NetMsg {
 
 #[derive(Deserialize, Serialize)]
 pub struct Signal {
+    #[serde(alias = "sdp_type", rename = "t")]
     pub sdp_type: String,
+    #[serde(alias = "sdp", rename = "s")]
     pub sdp: String,
 }
 

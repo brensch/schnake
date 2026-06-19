@@ -10,7 +10,7 @@ use web_sys::{
     HtmlVideoElement, MediaStream, MediaStreamConstraints, MediaStreamTrack, MediaTrackConstraints,
 };
 
-pub async fn scan_qr_text(container_id: &str) -> Result<String, JsValue> {
+pub async fn scan_qr_payload(container_id: &str) -> Result<Vec<u8>, JsValue> {
     let document = web_sys::window()
         .and_then(|window| window.document())
         .ok_or_else(|| js_err("missing document"))?;
@@ -27,10 +27,10 @@ pub async fn scan_qr_text(container_id: &str) -> Result<String, JsValue> {
     result
 }
 
-pub fn render_qr(document: &Document, id: &str, text: &str) -> Result<(), JsValue> {
+pub fn render_qr(document: &Document, id: &str, payload: &[u8]) -> Result<(), JsValue> {
     let element = by_id::<HtmlElement>(document, id)?;
-    element.set_inner_html(&qr_svg(text)?);
-    element.set_attribute("data-signal", text)?;
+    element.set_inner_html(&qr_svg(payload)?);
+    element.set_attribute("data-signal-bytes", &payload.len().to_string())?;
     Ok(())
 }
 
@@ -74,7 +74,7 @@ fn create_video(document: &Document, stream: &MediaStream) -> Result<HtmlVideoEl
 async fn scan_video_frames(
     document: &Document,
     video: &HtmlVideoElement,
-) -> Result<String, JsValue> {
+) -> Result<Vec<u8>, JsValue> {
     let canvas = document
         .create_element("canvas")?
         .dyn_into::<HtmlCanvasElement>()?;
@@ -105,10 +105,10 @@ async fn scan_video_frames(
             )?;
 
             let image = ctx.get_image_data(0.0, 0.0, scan_width as f64, scan_height as f64)?;
-            if let Some(text) =
+            if let Some(payload) =
                 decode_rgba(scan_width as usize, scan_height as usize, &image.data().0)
             {
-                return Ok(text);
+                return Ok(payload);
             }
         }
 
@@ -119,7 +119,7 @@ async fn scan_video_frames(
     }
 }
 
-fn decode_rgba(width: usize, height: usize, rgba: &[u8]) -> Option<String> {
+fn decode_rgba(width: usize, height: usize, rgba: &[u8]) -> Option<Vec<u8>> {
     let mut gray = Vec::with_capacity(width * height);
     for pixel in rgba.chunks_exact(4) {
         let value =
@@ -130,22 +130,20 @@ fn decode_rgba(width: usize, height: usize, rgba: &[u8]) -> Option<String> {
     decode_with_rqrr(width, height, &gray).or_else(|| decode_with_quircs(width, height, &gray))
 }
 
-fn decode_with_rqrr(width: usize, height: usize, gray: &[u8]) -> Option<String> {
+fn decode_with_rqrr(width: usize, height: usize, gray: &[u8]) -> Option<Vec<u8>> {
     let mut image =
         PreparedImage::prepare_from_greyscale(width, height, |x, y| gray[y * width + x]);
-    image
-        .detect_grids()
-        .into_iter()
-        .find_map(|grid| grid.decode().ok().map(|(_meta, text)| text))
+    image.detect_grids().into_iter().find_map(|grid| {
+        let mut payload = Vec::new();
+        grid.decode_to(&mut payload).ok().map(|_meta| payload)
+    })
 }
 
-fn decode_with_quircs(width: usize, height: usize, gray: &[u8]) -> Option<String> {
+fn decode_with_quircs(width: usize, height: usize, gray: &[u8]) -> Option<Vec<u8>> {
     let mut decoder = Quirc::default();
     for code in decoder.identify(width, height, gray).flatten() {
         if let Ok(decoded) = code.decode() {
-            if let Ok(text) = String::from_utf8(decoded.payload) {
-                return Some(text);
-            }
+            return Some(decoded.payload);
         }
     }
     None
@@ -175,9 +173,9 @@ async fn delay(ms: i32) -> Result<(), JsValue> {
     Ok(())
 }
 
-fn qr_svg(text: &str) -> Result<String, JsValue> {
-    let qr =
-        QrCode::encode_text(text, QrCodeEcc::Low).map_err(|_| js_err("QR payload is too large"))?;
+fn qr_svg(payload: &[u8]) -> Result<String, JsValue> {
+    let qr = QrCode::encode_binary(payload, QrCodeEcc::Low)
+        .map_err(|_| js_err("QR payload is too large"))?;
     let border = 4;
     let size = qr.size();
     let view_size = size + border * 2;
