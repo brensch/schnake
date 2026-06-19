@@ -28,10 +28,10 @@ pub async fn wait_for_ice(pc: &RtcPeerConnection) -> Result<(), JsValue> {
         if pc.ice_gathering_state() == RtcIceGatheringState::Complete {
             return Ok(());
         }
-        if local_sdp_has_candidate(pc) && elapsed >= 1_500.0 {
+        if local_sdp_has_candidate(pc) && elapsed >= 750.0 {
             return Ok(());
         }
-        if elapsed >= 5_000.0 {
+        if elapsed >= 3_000.0 {
             return Ok(());
         }
         delay(100).await?;

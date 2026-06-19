@@ -34,9 +34,11 @@ pub(crate) async fn create_host_invite(app: Rc<RefCell<App>>) -> Result<(), JsVa
     let offer = JsFuture::from(pc.create_offer()).await?;
     let offer: RtcSessionDescriptionInit = offer.unchecked_into();
     JsFuture::from(pc.set_local_description(&offer)).await?;
+    app.borrow().set_status("Gathering network info.");
     wait_for_ice(&pc).await?;
 
     let signal = encode_local_description(&pc)?;
+    app.borrow().set_status("Rendering host QR.");
     render_qr(&app.borrow().document, "host-qr", &signal)?;
 
     let mut app = app.borrow_mut();
@@ -88,9 +90,11 @@ async fn create_join_reply(app: Rc<RefCell<App>>, offer_text: &str) -> Result<()
     let answer = JsFuture::from(pc.create_answer()).await?;
     let answer: RtcSessionDescriptionInit = answer.unchecked_into();
     JsFuture::from(pc.set_local_description(&answer)).await?;
+    app.borrow().set_status("Gathering network info.");
     wait_for_ice(&pc).await?;
 
     let signal = encode_local_description(&pc)?;
+    app.borrow().set_status("Rendering reply QR.");
     render_qr(&app.borrow().document, "join-qr", &signal)?;
 
     let mut app = app.borrow_mut();

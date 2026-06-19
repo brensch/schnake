@@ -175,10 +175,10 @@ button:hover {
 .qr-code {
   display: grid;
   place-items: center;
-  min-height: 280px;
+  min-height: min(92vw, 620px);
   border: 1px solid #c9d5cd;
   background: #ffffff;
-  padding: 12px;
+  padding: 10px;
 }
 
 .qr-code:empty {
@@ -186,9 +186,10 @@ button:hover {
 }
 
 .qr-code svg {
-  width: min(100%, 320px);
+  width: min(100%, 620px);
   height: auto;
   display: block;
+  image-rendering: pixelated;
 }
 
 .scanner {

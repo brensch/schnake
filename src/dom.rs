@@ -26,6 +26,20 @@ pub fn err_text(error: JsValue) -> String {
         return text;
     }
 
+    let name = js_sys::Reflect::get(&error, &JsValue::from_str("name"))
+        .ok()
+        .and_then(|value| value.as_string());
+    let message = js_sys::Reflect::get(&error, &JsValue::from_str("message"))
+        .ok()
+        .and_then(|value| value.as_string());
+
+    match (name, message) {
+        (Some(name), Some(message)) if !message.is_empty() => return format!("{name}: {message}"),
+        (_, Some(message)) if !message.is_empty() => return message,
+        (Some(name), _) if !name.is_empty() => return name,
+        _ => {}
+    }
+
     js_sys::JSON::stringify(&error)
         .ok()
         .and_then(|text| text.as_string())

@@ -1,89 +1,177 @@
 use crate::dom::{by_id, js_err};
 use qrcodegen::{QrCode, QrCodeEcc};
+use quircs::Quirc;
+use rqrr::PreparedImage;
 use wasm_bindgen::prelude::*;
-use web_sys::{Document, HtmlElement};
-
-#[wasm_bindgen(inline_js = r#"
-export async function scan_qr(containerId) {
-  const container = document.getElementById(containerId);
-  if (!container) throw new Error("Missing scanner surface");
-  if (!("BarcodeDetector" in window)) {
-    throw new Error("QR scanning is not available in this browser");
-  }
-  if (!navigator.mediaDevices?.getUserMedia) {
-    throw new Error("Camera access is not available on this page");
-  }
-
-  const supported = BarcodeDetector.getSupportedFormats
-    ? await BarcodeDetector.getSupportedFormats()
-    : ["qr_code"];
-  if (!supported.includes("qr_code")) {
-    throw new Error("This browser cannot scan QR codes");
-  }
-
-  const detector = new BarcodeDetector({ formats: ["qr_code"] });
-  const stream = await navigator.mediaDevices.getUserMedia({
-    video: { facingMode: { ideal: "environment" } },
-    audio: false,
-  });
-
-  const video = document.createElement("video");
-  video.muted = true;
-  video.playsInline = true;
-  video.autoplay = true;
-  video.srcObject = stream;
-  container.replaceChildren(video);
-  await video.play();
-
-  return await new Promise((resolve, reject) => {
-    let done = false;
-    const stop = () => {
-      if (done) return;
-      done = true;
-      stream.getTracks().forEach((track) => track.stop());
-      container.replaceChildren();
-    };
-    const timeout = window.setTimeout(() => {
-      stop();
-      reject(new Error("No QR code found"));
-    }, 60000);
-
-    const frame = async () => {
-      if (done) return;
-      try {
-        const codes = await detector.detect(video);
-        if (codes.length > 0 && codes[0].rawValue) {
-          window.clearTimeout(timeout);
-          const value = codes[0].rawValue;
-          stop();
-          resolve(value);
-          return;
-        }
-      } catch (_) {
-        // Some browsers throw until the first video frame is ready.
-      }
-      window.requestAnimationFrame(frame);
-    };
-    frame();
-  });
-}
-"#)]
-extern "C" {
-    #[wasm_bindgen(catch)]
-    async fn scan_qr(container_id: &str) -> Result<JsValue, JsValue>;
-}
+use wasm_bindgen::JsCast;
+use wasm_bindgen_futures::JsFuture;
+use web_sys::{
+    CanvasRenderingContext2d, ContextAttributes2d, Document, HtmlCanvasElement, HtmlElement,
+    HtmlVideoElement, MediaStream, MediaStreamConstraints, MediaStreamTrack, MediaTrackConstraints,
+};
 
 pub async fn scan_qr_text(container_id: &str) -> Result<String, JsValue> {
-    scan_qr(container_id)
-        .await?
-        .as_string()
-        .ok_or_else(|| js_err("QR did not contain text"))
+    let document = web_sys::window()
+        .and_then(|window| window.document())
+        .ok_or_else(|| js_err("missing document"))?;
+    let container = by_id::<HtmlElement>(&document, container_id)?;
+    container.set_inner_html("");
+
+    let stream = open_camera().await?;
+    let video = create_video(&document, &stream)?;
+    container.append_child(&video)?;
+
+    let result = scan_video_frames(&document, &video).await;
+    stop_stream(&stream);
+    container.set_inner_html("");
+    result
 }
 
 pub fn render_qr(document: &Document, id: &str, text: &str) -> Result<(), JsValue> {
     let element = by_id::<HtmlElement>(document, id)?;
     element.set_inner_html(&qr_svg(text)?);
     element.set_attribute("data-signal", text)?;
+    Ok(())
+}
+
+async fn open_camera() -> Result<MediaStream, JsValue> {
+    let window = web_sys::window().ok_or_else(|| js_err("missing window"))?;
+    if !window.is_secure_context() {
+        return Err(js_err("camera needs HTTPS or localhost"));
+    }
+
+    let media_devices = window
+        .navigator()
+        .media_devices()
+        .map_err(|_| js_err("camera access is not available in this browser"))?;
+    let constraints = MediaStreamConstraints::new();
+    let video = MediaTrackConstraints::new();
+    video.set_facing_mode(&JsValue::from_str("environment"));
+    video.set_width(&JsValue::from_f64(1280.0));
+    video.set_height(&JsValue::from_f64(720.0));
+
+    constraints.set_audio_bool(false);
+    constraints.set_video(&video);
+
+    let stream = JsFuture::from(media_devices.get_user_media_with_constraints(&constraints)?)
+        .await?
+        .dyn_into::<MediaStream>()?;
+    Ok(stream)
+}
+
+fn create_video(document: &Document, stream: &MediaStream) -> Result<HtmlVideoElement, JsValue> {
+    let video = document
+        .create_element("video")?
+        .dyn_into::<HtmlVideoElement>()?;
+    video.set_muted(true);
+    video.set_autoplay(true);
+    video.set_attribute("playsinline", "true")?;
+    video.set_src_object(Some(stream));
+    let _ = video.play()?;
+    Ok(video)
+}
+
+async fn scan_video_frames(
+    document: &Document,
+    video: &HtmlVideoElement,
+) -> Result<String, JsValue> {
+    let canvas = document
+        .create_element("canvas")?
+        .dyn_into::<HtmlCanvasElement>()?;
+    let options = ContextAttributes2d::new();
+    options.set_will_read_frequently(true);
+    let ctx = canvas
+        .get_context_with_context_options("2d", &options)?
+        .ok_or_else(|| js_err("missing scanner canvas context"))?
+        .dyn_into::<CanvasRenderingContext2d>()?;
+
+    let started = js_sys::Date::now();
+    loop {
+        let width = video.video_width();
+        let height = video.video_height();
+        if width > 0 && height > 0 {
+            let scan_width = width.min(960);
+            let scan_height = ((height as f64) * (scan_width as f64 / width as f64))
+                .round()
+                .max(1.0) as u32;
+            canvas.set_width(scan_width);
+            canvas.set_height(scan_height);
+            ctx.draw_image_with_html_video_element_and_dw_and_dh(
+                video,
+                0.0,
+                0.0,
+                scan_width as f64,
+                scan_height as f64,
+            )?;
+
+            let image = ctx.get_image_data(0.0, 0.0, scan_width as f64, scan_height as f64)?;
+            if let Some(text) =
+                decode_rgba(scan_width as usize, scan_height as usize, &image.data().0)
+            {
+                return Ok(text);
+            }
+        }
+
+        if js_sys::Date::now() - started > 60_000.0 {
+            return Err(js_err("No QR code found"));
+        }
+        delay(120).await?;
+    }
+}
+
+fn decode_rgba(width: usize, height: usize, rgba: &[u8]) -> Option<String> {
+    let mut gray = Vec::with_capacity(width * height);
+    for pixel in rgba.chunks_exact(4) {
+        let value =
+            (0.299 * pixel[0] as f32 + 0.587 * pixel[1] as f32 + 0.114 * pixel[2] as f32) as u8;
+        gray.push(value);
+    }
+
+    decode_with_rqrr(width, height, &gray).or_else(|| decode_with_quircs(width, height, &gray))
+}
+
+fn decode_with_rqrr(width: usize, height: usize, gray: &[u8]) -> Option<String> {
+    let mut image =
+        PreparedImage::prepare_from_greyscale(width, height, |x, y| gray[y * width + x]);
+    image
+        .detect_grids()
+        .into_iter()
+        .find_map(|grid| grid.decode().ok().map(|(_meta, text)| text))
+}
+
+fn decode_with_quircs(width: usize, height: usize, gray: &[u8]) -> Option<String> {
+    let mut decoder = Quirc::default();
+    for code in decoder.identify(width, height, gray).flatten() {
+        if let Ok(decoded) = code.decode() {
+            if let Ok(text) = String::from_utf8(decoded.payload) {
+                return Some(text);
+            }
+        }
+    }
+    None
+}
+
+fn stop_stream(stream: &MediaStream) {
+    for track in stream.get_tracks().iter() {
+        if let Ok(track) = track.dyn_into::<MediaStreamTrack>() {
+            track.stop();
+        }
+    }
+}
+
+async fn delay(ms: i32) -> Result<(), JsValue> {
+    let promise = js_sys::Promise::new(&mut |resolve, _reject| {
+        let closure = Closure::once_into_js(move || {
+            let _ = resolve.call0(&JsValue::NULL);
+        });
+        if let Some(window) = web_sys::window() {
+            let _ = window.set_timeout_with_callback_and_timeout_and_arguments_0(
+                closure.as_ref().unchecked_ref(),
+                ms,
+            );
+        }
+    });
+    JsFuture::from(promise).await?;
     Ok(())
 }
 
